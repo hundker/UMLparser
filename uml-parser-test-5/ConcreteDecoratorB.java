@@ -1,16 +1,17 @@
 
-public class ConcreteDecoratorB extends Decorator {
+public class ConcreteDecoratorB {
 
+    private ConcreteDecoratorA component;
     private String addedState;
 
-    public ConcreteDecoratorB( Component c)
+    public ConcreteDecoratorB( ConcreteDecoratorA c)
     {
-        super( c ) ;
+        component = c;
     }
 
     public String operation()
     {
-        addedState = super.operation() ;
+        addedState = component.operation() ;
         return addedBehavior( addedState ) ;
     }
 

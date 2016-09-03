@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.BodyDeclaration;
@@ -17,12 +18,13 @@ public class FieldParser {
 	private List<String> attributes; //primitive attributes like int, String
 	private List<String> associates; //attributes of objects of other classes in this program
 	private Map<String, String> multiplicityMap;
+	private Map<String, String> objectClassMap;
 	
 	public FieldParser(){
 		attributes = new ArrayList<String>();
 		associates = new ArrayList<String>();	
 		multiplicityMap = new HashMap<String, String>();
-
+		objectClassMap = new HashMap<String, String>();
 	}
 	
 	public void visit(CompilationUnit cu){
@@ -30,6 +32,18 @@ public class FieldParser {
 		for (BodyDeclaration bd : bds) {
 
 			String[] str = bd.toStringWithoutComments().split(" ");
+			
+			//obtain property objects and their class
+			if (Pattern.matches("[A-Za-z]+", str[1]) && Pattern.matches("[A-Za-z]+(;)*", str[2])){
+				String object = "";
+				if (str[2].contains(";")) {
+					object = str[2].substring(0,str[2].length()-1);
+				} else {
+					object = str[2];
+				}
+				objectClassMap.put(object, str[1]);
+			}
+			
 			String modifier ="";
 			if (str.length == 2){
 				//for default or package
@@ -67,11 +81,11 @@ public class FieldParser {
 				
 			}
 			
-//			System.out.println(typeString);
+
 			int indexOfLeftSquare = typeString.indexOf('[');
 			int indexOfRightSquare = typeString.indexOf(']');
 			if (!attributeString.equals("") && attributeString.indexOf('#') == -1 && attributeString.indexOf('~') == -1) {
-//				System.out.println(attributeString);
+
 				for (String multiStr: multiples) {
 					if(typeString.indexOf(multiStr) != -1){
 						attributeString += "(*)";
@@ -87,11 +101,11 @@ public class FieldParser {
 					}
 					
 				}
-//				System.out.println(attributeString);
+
 				attributes.add(attributeString);
 				
 			} else {
-//				System.out.println(typeString);
+
 				if (!generalizedtype.equals("")) {
 					associateString = generalizedtype;
 					for (String multiStr : multiples) {
@@ -99,23 +113,23 @@ public class FieldParser {
 							 multiplicityMap.put(associateString,"*");
 						}
 					}
-//					System.out.println(typeString);
+
 					
 				} 
 				if (typeString.indexOf("<") == -1){
-					associateString = typeString;//.substring(0,indexOfLeftSquare);
-//					System.out.println(associateString);
+					associateString = typeString;
 
 				}
 				
 				if (associateString != " "){
-//					System.out.println(associateString);
+
 					associates.add(associateString);
 				}
 			}
 
 
 		}
+
 	}
 	
 	
@@ -130,6 +144,10 @@ public class FieldParser {
 	
 	public Map<String, String> getMultiplicityMap(){
 		return this.multiplicityMap;
+	}
+	
+	public Map<String, String> getObjectClassMap(){
+		return this.objectClassMap;
 	}
 
 }

@@ -18,10 +18,11 @@ import net.sourceforge.plantuml.SourceStringReader;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.stmt.BlockStmt;
 
 public class UmlParser {
 	
-	private List<String> plantGrammer; //list of grammer strings, will be joined as a single string at last
+	
 	private List<String> classNames;  //class names used in the target package
 	private List<String> interfaceNames;  //interface names used in the target package
 	private Map<String, List<String>> implementedInterfaces;  //a map for the implemented interfaces of each class
@@ -38,13 +39,14 @@ public class UmlParser {
 	private Map<String, Map<String,String>> multiplicityMapMap;
 	private Set<String> ballSocketInterfaceNames;
 	private Map<String, List<String>> lollipopInterfaceAndUsers;
-	private Map<String, List<String>> lollipopInterfaceAndExtenders;
+	private String classWithMain = "";
+	private Map<String,Map<String,List<SequenceDiagramActor>>> actorListMap;
+	
+	private List<String> sequenceDiagramGrammer = new ArrayList<String>(); //list of grammer strings, will be joined as a single string at last
+	
 	
 	public UmlParser(){
-		plantGrammer = new ArrayList<String>();
-		plantGrammer.add("@startuml");
-		plantGrammer.add("skinparam classAttributeIconSize 0");
-		
+
 		classNames = new ArrayList<String>();
 		interfaceNames = new ArrayList<String>();
 		implementedInterfaces = new HashMap<String, List<String>>();
@@ -61,7 +63,8 @@ public class UmlParser {
 		multiplicityMapMap = new HashMap<String, Map<String,String>>();
 		ballSocketInterfaceNames = new HashSet<String>();
 		lollipopInterfaceAndUsers = new HashMap<String, List<String>>();
-		lollipopInterfaceAndExtenders = new HashMap<String, List<String>>();
+		actorListMap = new HashMap<String,Map<String,List<SequenceDiagramActor>>>();
+		new HashMap<String, List<String>>();
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -92,7 +95,6 @@ public class UmlParser {
 					in.close();
 				}
 				
-//				System.out.println(cu.toString());
 				
 				//get interfaces implemented by current class
 				InterfaceAndClassParser iacp = new InterfaceAndClassParser();
@@ -123,15 +125,16 @@ public class UmlParser {
 				
 				MethodParser mp = new MethodParser();
 				
-				mp.visit(cu, null);
+				mp.visit(cu, fp.getObjectClassMap());
 				methodsMap.put(cuName, mp.getMethodsMap());
 				methodReturnMap.put(cuName, mp.getMethodReturnTypeMap());
 				uses.put(cuName, new ArrayList(mp.getMethodDependencies()));
 				mainbodyDependencies.put(cuName, new ArrayList(mp.getMainBodyDependencies()));
-//				System.out.println(mp.getMethodsMap());
-				
-
-				
+				actorListMap.put(cuName, mp.getActorListMap());
+				if (mp.getIsClassWithMain()) {
+					classWithMain = cuName;
+				}
+	
 			}
 		}
 		
@@ -143,21 +146,25 @@ public class UmlParser {
 	}
 	
 	
-	public void generateUML(String path){
+	public void generateClassDiagram(String outputPath){
+		List<String> classDiagramGrammer = new ArrayList<String>(); //list of grammer strings, will be joined as a single string at last
+		classDiagramGrammer.add("@startuml");
+		classDiagramGrammer.add("skinparam classAttributeIconSize 0");
 		List<String> strlist = new ArrayList<String>();
 		for (String className : classNames) {
+			StringBuilder sb = new StringBuilder();
 			if(interfaceNames.contains(className)) {
-				strlist.add("interface " + className + "<<interface>> {");
+				sb.append("interface " + className + "<<interface>> {\n");
 			} else {
-				strlist.add("class " + className + " {");
+				sb.append("class " + className + " {\n");
 			}
 			
 			for (String attr: attributeMap.get(className)){
-				strlist.add(attr);
+				sb.append(attr+"\n");
 			}
 			
 			for(String constructMethod: constructsMap.get(className)){
-				strlist.add(constructMethod.replace('[', '(').replace(']', ')') );
+				sb.append(constructMethod.replace('[', '(').replace(']', ')')+"\n" );
 				
 			}
 			
@@ -219,12 +226,13 @@ public class UmlParser {
 					}
 				}
 				if(!isSetterOrGetter){
-					strlist.add(method.getKey() + parameters.toString().replace('[', '(').replace(']', ')') + ":" +returnType);
+					sb.append(method.getKey() + parameters.toString().replace('[', '(').replace(']', ')') + ":" +returnType+"\n");
 				}	
 			}
 			
 
-			strlist.add("}");
+			sb.append("\n}");
+			strlist.add(sb.toString());
 		}
 		
 		//draw relationships
@@ -239,7 +247,7 @@ public class UmlParser {
 			List<String> associates = associateMap.get(className);
 			List<String> constructDepend = constructsDenpendencies.get(className);
 			List<String> used = uses.get(className);
-//			System.out.println(used);
+
 			List<String> implInterfaces = implementedInterfaces.get(className);
 			for (String impl: implInterfaces) {
 				strlist.add(className + "..|>" + impl);
@@ -260,7 +268,7 @@ public class UmlParser {
 //					ball-and-socket
 					
 					if (implementedInterfaces.get(className).contains(use)){
-//						strlist.add(className + "-(0-" + use);
+						//record the interface that need to be shown as ball-n-socket
 						if(lollipopInterfaceAndUsers.containsKey(use)) {
 							lollipopInterfaceAndUsers.get(use).add(className);
 						} else {
@@ -268,9 +276,6 @@ public class UmlParser {
 							lollipopInterfaceAndUsers.get(use).add(className);
 						}
 						
-//						if(strlist.contains(className + "..|>" + use)){
-//							strlist.remove(className + "..|>" + use);
-//						}
 						
 						ballSocketInterfaceNames.add(use);
 					} else {
@@ -294,7 +299,7 @@ public class UmlParser {
 				int index = str.indexOf("..|>");
 				
 				
-				System.out.println(str);
+//				System.out.println(str);
 				String interf = str.substring(index+4,str.length());
 				String extender = str.substring(0,index);
 				if(lollipopInterfaceAndUsers.containsKey(interf)) {
@@ -314,31 +319,23 @@ public class UmlParser {
 		}
 		
 		for (String lollipopInterface: lollipopInterfaceAndUsers.keySet()) {
-			for (int i = 0; i < strlist.size();i++) {
-				if (strlist.get(i).indexOf("interface " + lollipopInterface) != -1) {
-
-//					strsToRemove.add(strlist.get(i));
-//					strlist.remove(i);
-					System.out.println(strlist.get(i));
-					while (strlist.get(++i).indexOf('}') == -1) {
-//						System.out.println(strlist.get(i));
-						strsToRemove.add(strlist.get(i));
-//						strlist.remove(i);
-					}
-					strsToRemove.add(strlist.get(i));
-					System.out.println(strlist.get(i));
-//					strlist.remove(i);
+			for (String str : strlist){
+				if (str.indexOf("interface " + lollipopInterface) != -1){
+					strsToRemove.add(str);
 				}
-
 			}
+
 		}
 		
 		for (String strToRemove: strsToRemove) {
 			strlist.remove(strToRemove);
 		}
+		
 		for (String strToAdd: strsToAdd) {
-			System.out.println(strToAdd);
-			strlist.add(strToAdd);
+			if(!strlist.contains(strToAdd)){
+				strlist.add(strToAdd);
+			}
+			
 		}
 		
 		for (String className :classNames) {
@@ -369,10 +366,6 @@ public class UmlParser {
 				} else {
 					multiplicityRight = '"'+ multiplicityRight + '"';
 				}
-				if (multiplicityleft.equals("\"1\"") && multiplicityRight.equals("\"1\"")){
-					multiplicityleft = "";
-					multiplicityRight = "";
-				}
 				
 				String mulitLeftStr = className +multiplicityleft + "--"+ multiplicityRight + associate;
 				String mulitRightStr = associate + multiplicityRight+"--"+ multiplicityleft + className;
@@ -384,53 +377,13 @@ public class UmlParser {
 			}
 		}
 		
-//		List<String> stringsToRemove = new ArrayList<String>();
-//		List<String> stringsToAdd = new ArrayList<String>();
-//		for (String str: strlist){
-//			for (String intrf: ballSocketInterfaceNames){
-//				if (str.endsWith(intrf)){
-//					
-//					if (str.endsWith("..>"+intrf)) {
-//						System.out.println(str);
-//						stringsToRemove.add(str);
-//						String newStr1 = str.replace("..>"+intrf, "-(0-" +intrf);
-//						stringsToAdd.add(newStr1);
-//						continue;
-//						
-//					}
-//					
-//					
-//					if (str.endsWith("..|>"+intrf)) {
-//						stringsToRemove.add(str);
-//						String newStr2 = str.replace("..|>"+intrf, "-()" +intrf);
-//						stringsToAdd.add(newStr2);
-//						continue;
-//					}
-//					
-//					if (str.endsWith("--|>"+intrf)) {
-//						System.out.println(str);
-//						stringsToRemove.add(str);
-//						String newStr3 = str.replace("--|>"+intrf, "--()" +intrf);
-//						stringsToAdd.add(newStr3);
-//						continue;
-//					}
-//				}
-//			}
-//			
-//		}
-//		for (String str : stringsToAdd){
-//			strlist.add(str);
-//		}
-//		for (String str : stringsToRemove) {
-//			strlist.remove(str);
-//		}
+
 		
 		
-		plantGrammer.addAll(strlist);
-		plantGrammer.add("@enduml");
-		System.out.println(plantGrammer);
+		classDiagramGrammer.addAll(strlist);
+		classDiagramGrammer.add("@enduml");
 		
-		File file = new File(path + "-output.png");
+		File file = new File(outputPath + "ClassDiagram.png");
 		OutputStream png = null;
 		try {
 			png = new FileOutputStream(file);
@@ -438,7 +391,7 @@ public class UmlParser {
 			e.printStackTrace();
 		}
 		
-		SourceStringReader reader = new SourceStringReader(String.join("\n", plantGrammer));
+		SourceStringReader reader = new SourceStringReader(String.join("\n", classDiagramGrammer));
 		// Write the first image to "png"
 		String desc = null;
 		try {
@@ -450,14 +403,64 @@ public class UmlParser {
 		
 		
 	}
+
 	
+	public void generateSequenceDiagram(String outputPath) {
+		if (classWithMain == "") {
+			return;
+		}
+		
+		sequenceDiagramGrammer.add("@startuml\n");
+		dfs(classWithMain, "main");
+		sequenceDiagramGrammer.add("@enduml\n");
+		
+		File file = new File(outputPath + "SequenceDiagram.png");
+		OutputStream png = null;
+		try {
+			png = new FileOutputStream(file);
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		
+		SourceStringReader reader = new SourceStringReader(String.join("\n", sequenceDiagramGrammer));
+		// Write the first image to "png"
+		String desc = null;
+		try {
+			desc = reader.generateImage(png);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+	}
+	
+	private void dfs(String className, String methodName){
+		if (className == null || methodName == null) {
+			return;
+		}
+		
+
+		
+		for (SequenceDiagramActor actor : actorListMap.get(className).get(methodName)) {
+
+			if (actor.getClassName() != null && actor.getMethodName() != null){
+				sequenceDiagramGrammer.add(className + " -> " + actor.getClassName() + ":" + actor.getMethodName() + "\n");
+				sequenceDiagramGrammer.add("activate " + actor.getClassName() + "\n" );
+				dfs(actor.getClassName(),actor.getMethodName());
+				if (!className.equals(actor.getClassName())) {
+					sequenceDiagramGrammer.add(actor.getClassName() + " --> " + className  + "\n");
+				}
+				sequenceDiagramGrammer.add("deactivate " + actor.getClassName() + "\n" );
+			}
+		}
+		
+	}
 	
 	
 	public static void main(String[] args) {
 		File folder = null;
-		String path = "";
+		String outputPath = "";
 		
-		if (args.length > 1) {
+		if (args.length > 1 || args.length == 0) {
 			usage();
 			System.exit(1);
 		} else {
@@ -470,23 +473,20 @@ public class UmlParser {
 				System.out.println("Empty directory! Please indicate where the java files are!");
 			}
 			
-			path = args[0];
+			outputPath = args[0];
 		
 		}
 		
-		if(path != "") {
+		if(outputPath != "") {
 			UmlParser umlparser = new UmlParser();
 			try {
-				umlparser.walkDir(path);
-				umlparser.generateUML(path);
+				umlparser.walkDir(outputPath);
+				umlparser.generateClassDiagram(outputPath);
+//				umlparser.generateSequenceDiagram(outputPath);
 			} catch (IOException e) {
 				e.printStackTrace();
-			}
-			
-			
+			}	
 		}
-		
-		
 	}
 		
 		private static void usage() {

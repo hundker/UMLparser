@@ -23,7 +23,7 @@ public class ConstructorParser extends VoidVisitorAdapter{
 	}
 	
 	public void visit(ConstructorDeclaration cd, Object arg) {
-//		System.out.println(cd);
+
 		String modifier = null;
 		switch (cd.getModifiers()) {
 		case 0:
@@ -45,13 +45,8 @@ public class ConstructorParser extends VoidVisitorAdapter{
 			String[] parameterStrings = parameter.toString().split(",");
 			for (String eachPara: parameterStrings) {
 				String[] eachParaParts = eachPara.split(" ");
-//				for (String reservedType: reservedTypes) {
-//					if(eachParaParts[0].indexOf(reservedType) != -1) {
-//						continue;
-//					} else {
-						constructDependencies.add(eachParaParts[0]);
-//					}
-//				}
+
+				constructDependencies.add(eachParaParts[0]);
 
 				revisedParaStrings.add(eachParaParts[1] + ":" + eachParaParts[0]);
 			}

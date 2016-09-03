@@ -1,9 +1,9 @@
 
-public class Tester {
+public class Client {
 
     public static void main(String[] args)
     {
-        ConcreteDecoratorB obj = new ConcreteDecoratorB( new ConcreteDecoratorA( new ConcreteComponent() ) ) ;
+        ClassB obj = new ClassB( new ClassA( new ClassC() ) ) ;
         String result = obj.operation() ;
         System.out.println(result);
     }
